@@ -29,8 +29,12 @@
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Utilities/interface/StreamID.h"
+
 #include "DataFormats/HGCRecHit/interface/HGCRecHit.h"
 #include "DataFormats/HGCRecHit/interface/HGCRecHitCollections.h"
+#include "FWCore/Utilities/interface/EDGetToken.h"
+#include "FWCore/Utilities/interface/EDPutToken.h"
+#include "FWCore/Utilities/interface/InputTag.h"
 
 #include <vector>
 #include <utility> //std::pair
@@ -59,6 +63,7 @@ class HGCalLateralStudies : public edm::stream::EDProducer<> {
       // ----------member data ---------------------------
 
   edm::EDGetTokenT<HGCRecHitCollection> recHitsToken;
+  edm::EDPutTokenT<HGCRecHitCollection> putToken;    
   typedef std::vector< std::pair<int,int> > CoordCollection;
 };
 
@@ -77,8 +82,7 @@ class HGCalLateralStudies : public edm::stream::EDProducer<> {
 HGCalLateralStudies::HGCalLateralStudies(const edm::ParameterSet& iConfig)
 {
   //src_  = iConfig.getParameter<edm::InputTag>( "src" );
-  produces<CoordCollection>("coordinates");
-
+  putToken = produces<CoordCollection>("coordinates");
   recHitsToken = consumes<HGCRecHitCollection>(edm::InputTag("HGCalRecHit", "HGCEERecHits"));
 
 /* Examples
@@ -124,11 +128,13 @@ HGCalLateralStudies::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
   for(HGCRecHitCollection::const_iterator recHit = recHits.begin();
       recHit != recHits.end(); 
       ++recHit) {
-    recHit->detid(); 
-    //coords->push_back(recHit->detUV());
+    recHit->detid();
+
+    const std::pair<int,int> empty(0., 0.); 
+    coords->push_back(empty); //I will put the cel uv coordinates here
   }
 
-  iEvent.put(coords);
+  iEvent.put(putToken, coords);
 
 /* This is an event example
    //Read 'ExampleData' from the Event
