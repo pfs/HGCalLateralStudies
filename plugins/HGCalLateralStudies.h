@@ -83,9 +83,9 @@ private:
   const int linearUV(int u, int v) {return v*100+u;}
   void setDetector(int_layer);
   void recHitToolsSetup(const edm::EventSetup&);
-  bool cellFilter(GlobalPoint, std::pair<double,double>);
-  void fillWaferMap(const int_layer, std::pair<double,double>);
-  void fillWaferMaps(const std::vector<int_layer>, const std::pair<double,double>);
+  bool cellFilter(GlobalPoint);
+  void fillWaferMap(const int_layer);
+  void fillWaferMaps(const std::vector<int_layer>);
 };
 
 #endif //HGCalLateralStudies_h

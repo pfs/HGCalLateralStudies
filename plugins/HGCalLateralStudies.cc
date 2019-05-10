@@ -56,9 +56,9 @@ HGCalLateralStudies::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
 
   /*create maps for one-dimensional wafer identification
     only the layersAnalysed will have a map */
-  fillWaferMaps(layersAnalysed_, cellFilterCuts_);
+  fillWaferMaps(layersAnalysed_);
 
-  for(HGCRecHitCollection::const_iterator recHit = recHits.begin();
+  for(HGCRecHitCollection::iterator recHit = recHits.begin();
       recHit != recHits.end(); 
       ++recHit) {
     HGCSiliconDetId sid(recHit->detid());
@@ -166,21 +166,20 @@ HGCalLateralStudies::fillDescriptions(edm::ConfigurationDescriptions& descriptio
   desc.addUntracked<std::string>("WaferUVCoordinates");
 }
 
-bool HGCalLateralStudies::cellFilter(GlobalPoint p, std::pair<double,double> cuts) {
-  return p.mag() < cuts.first || p.mag() > cuts.second;
+bool HGCalLateralStudies::cellFilter(GlobalPoint p) {
+  return p.mag() < cellFilterCuts_.first || p.mag() > cellFilterCuts_.second;
 }
 
-void HGCalLateralStudies::fillWaferMap(int_layer layer, std::pair<double,double> cuts) {
+void HGCalLateralStudies::fillWaferMap(int_layer layer) {
   /*Fills the wafer maps such that for all analysed layers conversion between (u,v)
     and a linear index [0;nTotalLayers-1] is readily available and stored in the class.
     The filter selects only the (u,v) pairs that correspond to wafers close to the center.
   */
   int pos(0);
   const std::vector<DetId>& ids = gHGCal_->getValidDetIds();
-  for(std::vector<DetId>::const_iterator it = ids.begin(); it != ids.end(); ++it) {
+  for(std::vector<DetId>::iterator it = ids.begin(); it != ids.end(); ++it) {
     GlobalPoint point = gHGCal_->getPosition(*it);
-    //filter
-    if(cellFilter(point, cuts)) {
+    if(cellFilter(point)) {
       HGCSiliconDetId sid(*it);
       std::pair<int,int> uv = sid.waferUV();
       //check that the (u,v) pair was not introduced before
@@ -194,11 +193,10 @@ void HGCalLateralStudies::fillWaferMap(int_layer layer, std::pair<double,double>
   }
 }
 
-void HGCalLateralStudies::fillWaferMaps(const std::vector<int_layer> layers, 
-					const std::pair<double,double> cuts) {
+void HGCalLateralStudies::fillWaferMaps(const std::vector<int_layer> layers) {
   for(std::vector<int_layer>::const_iterator it = layers.begin(); it!=layers.end(); ++it) {
     setDetector(*it);
-    fillWaferMap(*it, cuts);
+    fillWaferMap(*it);
   }
 }
 //define this as a plug-in
