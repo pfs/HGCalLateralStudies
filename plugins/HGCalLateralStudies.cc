@@ -1,110 +1,36 @@
-// -*- C++ -*-
-//
-// Package:    UserCode/HGCalLateralStudies
-// Class:      HGCalLateralStudies
-// 
-/**\class HGCalLateralStudies HGCalLateralStudies.cc UserCode/HGCalLateralStudies/plugins/HGCalLateralStudies.cc
+#include "UserCode/HGCalLateralStudies/plugins/HGCalLateralStudies.h"
 
- Description: [one line class summary]
-
- Implementation:
-     [Notes on implementation]
-*/
-//
-// Original Author:  Bruno Alves
-//         Created:  Mon, 06 May 2019 15:22:22 GMT
-//
-//
-
-
-// system include files
-#include <memory>
-
-// user include files
-#include "FWCore/Framework/interface/Frameworkfwd.h"
-#include "FWCore/Framework/interface/stream/EDProducer.h"
-
-#include "FWCore/Framework/interface/Event.h"
-#include "FWCore/Framework/interface/MakerMacros.h"
-
-#include "FWCore/ParameterSet/interface/ParameterSet.h"
-#include "FWCore/Utilities/interface/StreamID.h"
-
-#include "DataFormats/HGCRecHit/interface/HGCRecHit.h"
-#include "DataFormats/HGCRecHit/interface/HGCRecHitCollections.h"
-#include "FWCore/Utilities/interface/EDGetToken.h"
-#include "FWCore/Utilities/interface/EDPutToken.h"
-#include "FWCore/Utilities/interface/InputTag.h"
-
-#include <vector>
-#include <utility> //std::pair
-
-//
-// class declaration
-//
-
-class HGCalLateralStudies : public edm::stream::EDProducer<> {
-   public:
-      explicit HGCalLateralStudies(const edm::ParameterSet&);
-      ~HGCalLateralStudies();
-
-      static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
-
-   private:
-      virtual void beginStream(edm::StreamID) override;
-      virtual void produce(edm::Event&, const edm::EventSetup&) override;
-      virtual void endStream() override;
-
-      //virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
-      //virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
-      //virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
-      //virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
-
-      // ----------member data ---------------------------
-
-  edm::EDGetTokenT<HGCRecHitCollection> recHitsToken;
-  edm::EDPutTokenT<HGCRecHitCollection> putToken;    
-  typedef std::vector< std::pair<int,int> > CoordCollection;
-};
-
-//
-// constants, enums and typedefs
-//
-
-
-//
-// static data member definitions
-//
-
-//
-// constructors and destructor
-//
-HGCalLateralStudies::HGCalLateralStudies(const edm::ParameterSet& iConfig)
+HGCalLateralStudies::HGCalLateralStudies(const edm::ParameterSet& iConfig):
+  recHitsToken(consumes<HGCRecHitCollection>(edm::InputTag("HGCalRecHit", "HGCEERecHits"))),
+  nTotalLayers(iConfig.getParameter<int>("nTotalLayers")),
+  nWafers(iConfig.getParameter<int>("nWafersPerLayer")),
+  cellFilterCuts(std::pair<iConfig.getParameter<double>("lCellFilterCut"),
+		 iConfig.getParameter<double>("hCellFilterCut")>),
+  layersAnalysed(iConfig.getParameter<std::vector<int>>("LayersAnalysed")),
+  CellUVCollection_name(iConfig.getParameter<std::string>("CellUVCoordinates")),
+  WaferUVCollection_name(iConfig.getParameter<std::string>("WaferUVCoordinates"))
 {
-  //src_  = iConfig.getParameter<edm::InputTag>( "src" );
-  putToken = produces<CoordCollection>("coordinates");
-  recHitsToken = consumes<HGCRecHitCollection>(edm::InputTag("HGCalRecHit", "HGCEERecHits"));
+  produces<CellUVCollection>(CellUVCollection_name);  
+  produces<CellUVCollection>(WaferUVCollection_name);  
 
-/* Examples
-   produces<ExampleData2>();
-
-   //if do put with a label
-   produces<ExampleData2>("label");
- 
-   //if you want to put into the Run
-   produces<ExampleData2,InRun>();
-*/
-   //now do what ever other initialization is needed
-  
+  waferFilteredMaps.reserve(nTotalLayers);
+  layersAnalysed_dirs.reserve(nTotalLayers);
+  for(int iLayer=0; iLayer<nTotalLayers; ++iLayer) {
+    layersAnalysed_dirs.push_back(fs->mkdir("layer"+std::to_string(iLayer)));
+    std::vector<TH2F> h_tmp;
+    for(int iWafer=0; iWafer<nWafers; ++iWafer) {
+      std::string name_tmp = std::to_string(iWafer);
+      TH2F *h_ = layersAnalysed_dirs[iLayer].make<TH2F>(name_tmp.c_str(), name_tmp.c_str(), 
+						25, -12, 12, 25, -12, 12);
+      h_tmp.push_back(*h_);
+    }
+    histos.push_back(h_tmp);
+  }
 }
 
 
 HGCalLateralStudies::~HGCalLateralStudies()
 {
- 
-   // do anything here that needs to be done at destruction time
-   // (e.g. close files, deallocate resources etc.)
-
 }
 
 
@@ -116,42 +42,42 @@ HGCalLateralStudies::~HGCalLateralStudies()
 void
 HGCalLateralStudies::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
-  std::auto_ptr<CoordCollection> coords(new CoordCollection);
+  std::unique_ptr<CellUVCollection> celluv_coords = std::make_unique<CellUVCollection>();
+  std::unique_ptr<WaferUVCollection> waferuv_coords = std::make_unique<WaferUVCollection>();
 
   edm::Handle<HGCRecHitCollection> recHitsHandle;
   iEvent.getByToken(recHitsToken, recHitsHandle);
   const auto &recHits = *recHitsHandle;
-
   const int size = recHitsHandle->size();
-  coords->reserve(size);
+  celluv_coords->reserve(size);
+  waferuv_coords->reserve(size);
+
+  /*create maps for one-dimensional wafer identification
+    only the layersAnalysed will have a map */
+  fillWaferMaps(layersAnalysed, cellFilterCuts);
 
   for(HGCRecHitCollection::const_iterator recHit = recHits.begin();
       recHit != recHits.end(); 
       ++recHit) {
-    recHit->detid();
-
-    const std::pair<int,int> empty(0., 0.); 
-    coords->push_back(empty); //I will put the cel uv coordinates here
+    HGCSiliconDetId sid(recHit->detid());
+    int det_layer = sid.layer();
+    //store the data in case the RecHit was measured in one of the user's chosen layersAnalysed
+    if(std::find(layersAnalysed.begin(), layersAnalysed.end(), det_layer) != layersAnalysed.end()) {
+      std::pair<int,int> cellUV(sid.cellUV());
+      std::pair<int,int> waferUV(sid.waferUV());
+      int waferId = waferFilteredMaps[det_layer][linearUV(waferUV.first, waferUV.second)];
+      histos[det_layer][waferId].Fill(cellUV.first, cellUV.second);
+    }
   }
-
-  iEvent.put(putToken, coords);
-
-/* This is an event example
-   //Read 'ExampleData' from the Event
-   Handle<ExampleData> pIn;
-   iEvent.getByLabel("example",pIn);
-
-   //Use the ExampleData to create an ExampleData2 which 
-   // is put into the Event
-   iEvent.put(std::make_unique<ExampleData2>(*pIn));
-*/
+  
+  //iEvent.put(std::move(celluv_coords), CellUVCollection_name);
+  //iEvent.put(std::move(waferuv_coords), WaferUVCollection_name);
 
 /* this is an EventSetup example
    //Read SetupData from the SetupRecord in the EventSetup
    ESHandle<SetupData> pSetup;
    iSetup.get<SetupRecord>().get(pSetup);
 */
- 
 }
 
 // ------------ method called once each stream before processing any runs, lumis or events  ------------
@@ -166,12 +92,20 @@ HGCalLateralStudies::endStream() {
 }
 
 // ------------ method called when starting to processes a run  ------------
-/*
 void
 HGCalLateralStudies::beginRun(edm::Run const&, edm::EventSetup const&)
 {
+  edm::ESHandle<CaloGeometry> geom;
+  es.get<CaloGeometryRecord>().get(geom);
+
+  if(myDet_==DetId::HGCalEE || myDet_==DetId::HGCalHSi)
+    gHGCal_ = dynamic_cast<const HGCalGeometry*>(geom->getSubdetectorGeometry(myDet_, mySubDet_));
+  else {
+    gHGCal = 0;
+    throw std::domain_error("wrong detector");
+  }
 }
-*/
+
  
 // ------------ method called when ending the processing of a run  ------------
 /*
