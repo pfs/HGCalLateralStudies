@@ -1,3 +1,6 @@
+#ifndef HGCalLateralStudies_h
+#define HGCalLateralStudies_h
+
 // system include files
 #include <memory>
 
@@ -21,7 +24,11 @@
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 #include "Geometry/HGCalGeometry/interface/HGCalGeometry.h"
+#include "Geometry/CaloGeometry/interface/CaloGeometry.h"
+#include "Geometry/Records/interface/CaloGeometryRecord.h"
+#include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
+#include <iostream>
 #include <vector>
 #include <utility> //std::pair
 #include <algorithm> //std::find
@@ -39,6 +46,7 @@ public:
   
 private:
   //typedefs
+  typedef unsigned int int_layer;
   typedef std::unordered_map<int,int> waferFilteredMap;
 
   //variables
@@ -47,11 +55,14 @@ private:
   const HGCalGeometry* gHGCal_;
   DetId::Detector myDet_; 
   ForwardSubdetector mySubDet_;
+  hgcal::RecHitTools recHitTools_;
+  int_layer lastLayerEE_= 99;
+  int_layer lastLayerFH_= 99;
   const int nTotalLayers_;
   const int nWafers_;
   const std::pair<double, double> cellFilterCuts_;
   std::vector<TFileDirectory> layersAnalysedDirs_; //one subdir per layer even if it is not used
-  const std::vector<int> layersAnalysed_;
+  const std::vector<int_layer> layersAnalysed_;
   std::vector< std::vector<TH2F> > histos_; //1d: layersAnalysed; 2d: wafers
   std::vector<waferFilteredMap> waferFilteredMaps_; //one waferFilteredMap per analysed layer
 
@@ -65,45 +76,16 @@ private:
   virtual void beginStream(edm::StreamID) override;
   virtual void produce(edm::Event&, const edm::EventSetup&) override;
   virtual void endStream() override;
-  //virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
+  virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
   //virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
   //virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
   //virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
   const int linearUV(int u, int v) {return v*100+u;}
-  const HGCalGeometry* getGeometry();
-  
-  //templates
-  template <class T> 
-    bool cellFilter(GlobalPoint p, std::pair<T,T> cuts) {
-    return p.mag() < cuts.first || p.mag() > cuts.second;
-  }
-  template <class T>
-    void fillWaferMap(int layer, std::pair<T,T> cuts) {
-    /*Fills the wafer maps such that for all analysed layers conversion between (u,v)
-      and a linear index [0;nTotalLayers-1] is readily available and stored in the class.
-      The filter selects only the (u,v) pairs that correspond to wafers close to the center.
-    */
-    int pos(0);
-    std::vector<DetId>& ids = gHGCal_->getValidDetIds();
-    for(std::vector<DetId>::iterator it = ids.begin(); it != ids.end(); ++it) {
-      GlobalPoint point = gHGCal_->getPosition(*it);
-      //filter
-      if(cellFilter(point, cuts)) {
-	HGCSiliconDetId sid(*it);
-	std::pair<int,int> uv = sid.cellUV();
-	//check that the (u,v) pair was not introduced before
-	if (std::find(waferFilteredMaps_[layer].begin(), 
-		      waferFilteredMaps_[layer].end(), 
-		      uv) == waferFilteredMaps_[layer].end()) {
-	  waferFilteredMaps_[layer].insert( linearUV(uv.first, uv.second), pos );
-	  ++pos;
-	}
-      }
-    }
-  }
-  template <class T> 
-    void fillWaferMaps(std::vector<int> layers, std::pair<T,T> cuts) {
-    for(std::vector<int>::iterator it = layers.begin(); it!=layers.end(); ++it)
-      fillWaferMap(*it, cuts);
-  }
+  void setDetector(int_layer);
+  void recHitToolsSetup(const edm::EventSetup&);
+  bool cellFilter(GlobalPoint, std::pair<double,double>);
+  void fillWaferMap(const int_layer, std::pair<double,double>);
+  void fillWaferMaps(const std::vector<int_layer>, const std::pair<double,double>);
 };
+
+#endif //HGCalLateralStudies_h
