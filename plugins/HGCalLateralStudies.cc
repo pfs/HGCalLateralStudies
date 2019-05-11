@@ -58,10 +58,8 @@ HGCalLateralStudies::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
     only the layersAnalysed will have a map */
   fillWaferMaps(layersAnalysed_);
 
-  for(HGCRecHitCollection::iterator recHit = recHits.begin();
-      recHit != recHits.end(); 
-      ++recHit) {
-    HGCSiliconDetId sid(recHit->detid());
+  for(const auto &recHit : recHits){
+    HGCSiliconDetId sid(recHit.detid());
     int_layer det_layer = static_cast<int_layer>(sid.layer());
     //store the data in case the RecHit was measured in one of the user's chosen layersAnalysed
     if(std::find(layersAnalysed_.begin(), layersAnalysed_.end(), det_layer) != layersAnalysed_.end()) {
@@ -177,10 +175,10 @@ void HGCalLateralStudies::fillWaferMap(int_layer layer) {
   */
   int pos(0);
   const std::vector<DetId>& ids = gHGCal_->getValidDetIds();
-  for(std::vector<DetId>::iterator it = ids.begin(); it != ids.end(); ++it) {
-    GlobalPoint point = gHGCal_->getPosition(*it);
+  for(const auto &it : ids) {
+    GlobalPoint point = gHGCal_->getPosition(it);
     if(cellFilter(point)) {
-      HGCSiliconDetId sid(*it);
+      HGCSiliconDetId sid(it);
       std::pair<int,int> uv = sid.waferUV();
       //check that the (u,v) pair was not introduced before
       if (std::find(waferFilteredMaps_[layer].begin(), 

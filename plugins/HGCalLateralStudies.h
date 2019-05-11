@@ -80,7 +80,7 @@ private:
   //virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
   //virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
   //virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
-  const int linearUV(int u, int v) {return v*100+u;}
+  int linearUV(int u, int v) {return v*100+u;}
   void setDetector(int_layer);
   void recHitToolsSetup(const edm::EventSetup&);
   bool cellFilter(GlobalPoint);
